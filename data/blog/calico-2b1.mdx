@@ -1,0 +1,229 @@
+---
+title: CALICO 2b1
+date: '2025-05-01'
+tags: ['programming']
+draft: false
+summary: A silly geometry problem that I couldn't solve.
+---
+
+## Preface
+
+As an aspiring CS major, it is well known that we are not known for going outside. Being a goofy contrarian (j.k., I was just bored), I decided to break the norm and actually go somewhere? What was the location of choice? Berkeley's CALICO tournament!
+
+Overall it was pretty fun, but some of the problems were definitely a bit cursed... just like that absurd Bánh Mì sandwich they gave us; that thing seared my tongue like a cast iron pan on a steak. 
+
+Anyways, back to the problems. There was this one really goofy coordinate geometry problem that I got absolutely roasted by, because I suck at actually coding hard things. 
+
+Oh, and we got 4th place. Not bad I guess! Mainly my teammates hard carrying me though.
+
+## So, what's the problem?
+
+> There is a rectangle located somewhere in 2D space. You are given a set of $n$ points by their decimal (not necessarily integer) coordinates $(x_1,y_1),(x_2,y_2),...,(x_n,y_n)$ sampled uniformly at random from the perimeter of the rectangle.
+> 
+> The following information is guaranteed:
+> 1. The sampled points uniquely describe a single rectangle.
+> 2. The data has the points sampled uniformly around the rectangle.
+> 
+> Using this information, find the area of the rectangle.
+> 
+> $15 \leq n \leq 1000$
+
+This problem annoyed me to no end. I came up with, like, $998244353$ fake solves until I came upon the correct idea.
+
+## Fakesolve #1: Just take the convex hull and find the area!
+
+Yeah, this was pretty silly. I forgot that the convex hull is, well, a subset of points, and that we aren't guaranteed to have the four corners.
+
+## Fakesolve #2: Brute force pairs of points to find more colinear points
+
+Okay, this one wasn't as stupid. My idea was the following:
+> If we "slice" our rectangle, then we will have at most 2 points if this slice isn't a line segment of our rectangle boundaries. However, if so, then there will be more than 2 points, so surely this works!
+
+Yeah, no. This does not work unfortunately. Yikes!
+
+![Example Rectangle](/static/images/calico/rectangle.png)
+
+If we consider the rectangle above, it becomes clear that there is no guarantee that 3 points will be colinear
+
+## Solve: Convex hull, again!
+
+Okay, so what is the actual solve?
+
+Well, let's consider the convex hull again.
+
+![Example Rectangle 2](/static/images/calico/rectangle-hull.png)
+
+Notice anything interesting? Well, the rectangle actually shares a few lines in common with the lines in our convex hull!
+
+To show this is true, we just need to show that our rectangle will always have at least one side where there are 2 points on it. This is always true! Why? Well, remember that $n$ is at least $15$. That means that there must be at least one pair of points.
+
+After finding the convex hull, we proceed to try each line, which is defined by two adjacent points on our convex hull. We can use some coordinate geometry to verify each possible line in $\mathcal{O}(n)$ time. Because there are $\mathcal{O}(n)$ points to check, the total runtime is a fast $\mathcal{O}(n^2)$.
+
+```cpp
+#include <bits/stdc++.h>
+
+using ll = long long;
+
+using T = long double;
+using pt = std::array<T, 2>;
+using vec = std::array<T, 2>;
+using line = std::array<T, 2>;
+
+inline namespace Geo { 
+    T cross(const vec &a, const vec &b) {
+        return a[0] * b[1] - a[1] * b[0];
+    }
+
+    vec operator-(const pt &a, const pt &b) {
+        return {a[0] - b[0], a[1] - b[1]};
+    }
+
+    T eval(const line &a, const T &x) {
+        return a[0] * x + a[1];
+    } 
+
+    pt intersect(const line &a, const line &b) {
+        const auto &[m1, b1] = a;
+        const auto &[m2, b2] = b;
+        const T x = (b2 - b1) / (m1 - m2);
+        return {x, eval(a, x)};
+    }
+
+    line make_line(const pt &loc, const T slope) {
+        return {slope, loc[1] - slope * loc[0]};
+    }
+
+    line make_line(const pt &a, const pt &b) {
+        const T slope = (b[1] - a[1]) / (b[0] - a[0]);
+        return make_line(a, slope);
+    }
+
+    T polygon_area(const std::vector<pt> &locs) {
+        const int n = locs.size();
+
+        T res = 0;
+        for (int i = 0; i < n; i++) {
+            const auto [x1, y1] = locs[i];
+            const auto [x2, y2] = locs[(i + 1) % n];
+            res += x1 * y2 - y1 * x2;
+        }
+
+        return std::abs(res) / 2;
+    }
+
+    std::vector<pt> lower_hull(std::vector<pt> locs) {
+        std::sort(std::begin(locs), std::end(locs));
+
+        const int n = locs.size();
+        if (n < 2) { return locs; }
+
+        std::vector<pt> hull;
+        for (int i = 0; i < n; i++) {
+            while (hull.size() > 1 &&
+			       cross(hull.back() - hull[hull.size() - 2],
+			             locs[i] - hull.back()) <= 0) {
+			    hull.pop_back();
+			}
+            
+            hull.push_back(locs[i]);
+        }
+
+        return hull;
+    }
+}
+
+const T eps = 1e-7;
+
+void solve() {
+    int n;
+    std::cin >> n;
+    std::vector<pt> pts(n);
+    for (auto &[x, y] : pts) {
+        std::cin >> x >> y;
+    }
+
+    for (int t = 0; t < 2; t++) {
+        auto hull = lower_hull(pts);
+
+        for (int i = 0; i + 1 < hull.size(); i++) {
+            const line l1 = make_line(hull[i], hull[i + 1]);
+            const auto [m1, b1] = l1;
+            const auto m2 = -1 / m1;
+            
+            T min_x = 1e9, max_x = -1e9;
+            for (int j = 0; j < n; j++) {
+                const auto [xi, yi] = intersect(l1, make_line(pts[j], m2));
+                min_x = std::min(min_x, xi);
+                max_x = std::max(max_x, xi);
+            }
+
+            const line l2 = make_line(pt{min_x, eval(l1, min_x)}, m2);
+            const line l3 = make_line(pt{max_x, eval(l1, max_x)}, m2);
+
+            T max_b = -1e9;
+            for (int j = 0; j < n; j++) {
+                const auto [cm, cb] = make_line(pts[j], m1);
+                max_b = std::max(max_b, cb);
+            }
+
+            const line l4 = {m1, max_b};
+
+            // verify that every point is covered now
+            bool good = true;
+            for (int j = 0; j < n; j++) {
+                const auto [x, y] = pts[j];
+                bool works = false;
+                for (const line &l : {l1, l2, l3, l4}) {
+                    works |= std::abs(eval(l, x) - y) < eps;
+                }
+                good &= works;
+            }
+
+            if (!good) { continue; }
+
+            // calculate intersections in CCW order
+            std::vector<line> segs = {l1, l3, l4, l2};
+            std::vector<pt> its;
+            for (int j = 0; j < 4; j++) {
+                its.push_back(intersect(segs[j], segs[(j + 1) % 4]));
+            }
+
+            // if axis aligned, answer is NaN for my code
+            T res = polygon_area(its);
+            if (!std::isnan(res)) {
+                std::cout << res << '\n';
+                return;
+            }
+        }
+
+        // reflect it, so we don't need to handle upper hull
+        for (auto &[x, y] : pts) {
+            x *= -1, y *= -1;
+        }
+    }
+
+    T min_x = 1e9, max_x = -1e9;
+    T min_y = 1e9, max_y = -1e9;
+
+    for (int i = 0; i < n; i++) {
+        const auto [x, y] = pts[i];
+        min_x = std::min(min_x, x);
+        max_x = std::max(max_x, x);
+        min_y = std::min(min_y, y);
+        max_y = std::max(max_y, y);
+    }
+
+    std::cout << (max_y - min_y) * (max_x - min_x) << '\n';
+}
+
+int main() {
+    std::ios_base::sync_with_stdio(false);
+    std::cin.tie(nullptr);
+    
+    int t;
+    std::cin >> t;
+    while (t--) {
+        solve();
+    }
+}
+```
