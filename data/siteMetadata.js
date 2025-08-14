@@ -2,16 +2,16 @@
 const siteMetadata = {
   title: 'Justin\'s Blog',
   author: 'Justin Ji',
-  headerTitle: 'TailwindBlog',
-  description: 'A blog created with Next.js and Tailwind.css',
+  headerTitle: 'Justin\'s Blog',
+  description: 'A mix of dumb thoughts, coding stuff, and pictures.',
   language: 'en-us',
   theme: 'system', // system, dark or light
-  siteUrl: 'https://thegamingmousse.github.io/blog',
-  siteRepo: 'https://github.com/thegamingmousse/blog',
+  siteUrl: 'https://eysbutno.github.io',
+  siteRepo: 'https://github.com/eysbutno/eysbutno.github.io',
   siteLogo: `${process.env.BASE_PATH || ''}/static/images/logo.png`,
   socialBanner: `${process.env.BASE_PATH || ''}/static/images/twitter-card.png`,
   email: 'justinjiv1.0@gmail.com',
-  github: 'https://github.com/thegamingmousse',
+  github: 'https://github.com/eysbutno',
   locale: 'en-US',
 
   // set to true if you want a navbar fixed to the top
