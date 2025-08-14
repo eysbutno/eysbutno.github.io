@@ -2,14 +2,14 @@
 const siteMetadata = {
   title: 'Justin\'s Blog',
   author: 'Justin Ji',
-  headerTitle: 'Justin\'s Blog',
+  headerTitle: 'Blog',
   description: 'A mix of dumb thoughts, coding stuff, and pictures.',
   language: 'en-us',
   theme: 'system', // system, dark or light
   siteUrl: 'https://eysbutno.github.io',
   siteRepo: 'https://github.com/eysbutno/eysbutno.github.io',
-  siteLogo: `${process.env.BASE_PATH || ''}/static/images/logo.png`,
-  socialBanner: `${process.env.BASE_PATH || ''}/static/images/twitter-card.png`,
+  siteLogo: `${process.env.BASE_PATH ?? ''}/static/images/logo.png`,
+  socialBanner: `${process.env.BASE_PATH ?? ''}/static/images/twitter-card.png`,
   email: 'justinjiv1.0@gmail.com',
   github: 'https://github.com/eysbutno',
   locale: 'en-US',
