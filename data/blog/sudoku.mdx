@@ -1,0 +1,232 @@
+---
+title: Sudoku Shenanigans
+date: '2026-2-27'
+tags: ['programming']
+draft: false
+summary: CS bashing at its finest.
+---
+
+I was once challenged to solve a Sudoku puzzle. Being an idiot, I couldn't do it. So, instead of solving it by hand, I turned to... the computer!
+
+## The SAT Problem
+
+No, not *that* SAT. The **Satisfiability Problem** is a classic of computer science, and is **NP-Complete** (i.e., it's fast to verify, but slow to solve). 
+The problem basically states:
+> Given a list of boolean variables $x_1, x_2, \dots, x_n$, and a boolean formula $F(x_1, x_2, \dots, x_n)$, create a valid assignment of $x$ satisfying the formula.
+
+It's a simple enough statement, but is one of the most important problems in CS.
+
+> [!NOTE]  
+> The SAT problem technically only involves checking if some assignment $x$ exists, and not constructing one. However, most SAT solvers produce a valid solution as well.
+> 
+> Also, our boolean formula can **only** use the bitwise negation (NOT), AND, and OR operations. Note that it's possible to construct all other boolean formulas using fancier operators (e.g. XOR) with just these three operations, but traditionally only these operators are used. 
+
+<Info title="Note">
+The SAT problem technically only involves checking if some assignment $x$ exists, and not constructing one. However, most SAT solvers produce a valid solution as well.
+
+Also, our boolean formula can **only** use the bitwise negation (NOT), AND, and OR operations. Note that it's possible to construct all other boolean formulas using fancier operators (e.g. XOR) with just these three operations, but traditionally only these operators are used. 
+</Info>
+
+Anyways, with some reasoning, we can model a Sudoku board as a SAT problem!
+
+## Sudoku? SAT?
+
+So, now we just need to create a boolean formula to model a valid Sudoku board. First, let's define our boolean variables:
+
+$$
+x[i][j][k] = \text{if cell } (i, j) \text{ has the value } k
+$$
+
+In our actual implementation, we will linearize each $(i, j, k)$ ID into a 
+single value. But, for now, this is easier to understand.
+
+Recall that for a valid Sudoku board, the following must hold:
+- For each cell $(i, j)$, only one value of $x[i][j][k]$ is true (duh!).
+- Each row, column, and 3x3 subgrid contains all the values from $1$ to $9$.
+
+Note that the second condition can be rephrased as:
+- Each row, column, and 3x3 subgrid contains **exactly one occurrence** of each value $k$.
+
+This reframing is subtle, but somewhat important.
+
+Anyways, to check each condition, we want to create a formula $F(x_1, x_2, \dots, x_n)$ 
+that returns if exactly one value of $x_i$ is true. 
+
+To do this, we can break it down into two simpler checks:
+- Is there **any** value of $x_i$ that is true?
+  - To check this, we just see if the bitwise OR of all $x_i$ is true.
+- Is there **any pair** of values $x_i$ and $x_j$ (where $i \neq j$) that are both true?
+  - To check this, we make sure all $\neg x_i \lor \neg x_j$ are true. In plain terms, we make sure no two values are both true, by making sure negating and OR-ing both values always results in true. 
+
+> [!IMPORTANT]  
+> When notating SAT problems, we don't use the same symbols as we do in CS. The $\neg$ symbol represents NOT (`!` in CS terms), $\lor$ represents AND (`&`; think the union symbol in math), and $\wedge$ represents OR (`|`; think the intersection symbol in math).
+
+For example, with 3 variables $x_1, x_2, x_3$, a formula to determine if exactly one of them is true would be as follows:
+
+$$
+(x_1 \lor x_2 \lor x_3) \; \wedge \; (\neg x_1 \lor \neg x_2) \; \wedge \; (\neg x_2 \lor \neg x_3) \; \wedge \; (\neg x_1 \lor \neg x_3)
+$$
+
+With that, we can construct a SAT formula for a valid Sudoku board!
+
+## Implementation
+
+Since I'm way too unskilled to write a SAT solver myself (and there's 998244353 good ones already), I just used a Python module called `pysat`to do the solving. You can find 
+that module [here](https://pysathq.github.io/).
+
+The code is somewhat messy, since this is a proof-of-concept. But it works!
+
+```py 
+from pysat.formula import *
+from pysat.solvers import Solver
+import time
+
+def get_id(row, col, val):
+    return (row - 1) * 81 + (col - 1) * 9 + val
+
+def gen_clauses():
+    def exactly_one(values):
+        clauses = []
+
+        # ensure at least 1 true
+        clauses.append([v for v in values])
+
+        # ensure no two clauses are both on
+        for i in range(len(values)):
+            for j in range(i + 1, len(values)):
+                clauses.append([-values[i], -values[j]])
+        return clauses
+    
+    clauses = []
+    
+    # ensure each cell only has one value
+    for row in range(1, 10):
+        for col in range(1, 10):
+            ids = [get_id(row, col, val) for val in range(1, 10)]
+            clauses += exactly_one(ids)
+
+    # ensure each row has one of each value
+    for row in range(1, 10):
+        for val in range(1, 10):
+            ids = [get_id(row, col, val) for col in range(1, 10)]
+            clauses += exactly_one(ids)
+
+    # ensure each col has one of each value
+    for col in range(1, 10):
+        for val in range(1, 10):
+            ids = [get_id(row, col, val) for row in range(1, 10)]
+            clauses += exactly_one(ids)
+
+    # ensure each subgrid has one of each value
+    for row in range(1, 10, 3):
+        for col in range(1, 10, 3):
+            # subgrid starts at (row, col)
+            for val in range(1, 10):
+                ids = [get_id(row + x, col + y, val) for x in range(0, 3) for y in range(0, 3)]
+                clauses += exactly_one(ids)
+
+    return clauses
+
+clauses = gen_clauses()
+
+# clues are the already-filled cells
+clues = []
+
+for r, c, v in clues:
+    clauses.append([get_id(r, c, v)])  # unit clause for a clue
+
+cnf = CNF(from_clauses=clauses)
+
+start = time.time()
+
+with Solver(bootstrap_with=cnf.clauses) as s:
+    sat = s.solve()
+    if not sat:
+        print("unsatisfiable / no solution")
+    else:
+        model = s.get_model()
+
+        # extract positive literals that correspond to (r,c,v)
+        grid = [[0] * 9 for _ in range(9)]
+        for lit in model:
+            if lit > 0 and 1 <= lit <= 729:
+                idx = lit - 1
+                row = idx // 81 + 1
+                col = (idx % 81) // 9 + 1
+                val = idx % 9 + 1
+                grid[row - 1][col - 1] = val
+
+        for row in grid:
+            print(" ".join(str(x) for x in row))
+
+end = time.time()
+print("Time Elapsed", end - start)
+```
+
+Let's test our solver out!
+
+The ["hardest Sudoku problem"](https://abcnews.go.com/blogs/headlines/2012/06/can-you-solve-the-hardest-ever-sudoku) alledgedly takes a few hours to solve by hand. 
+First, we need to convert the board into clues: 
+
+```py
+clues = [
+    # Row 1
+    (1, 1, 8),
+    # Row 2
+    (2, 3, 3), (2, 4, 6),
+    # Row 3
+    (3, 2, 7), (3, 5, 9), (3, 7, 2),
+    # Row 4
+    (4, 2, 5), (4, 6, 7),
+    # Row 5
+    (5, 5, 4), (5, 6, 5), (5, 7, 7),
+    # Row 6
+    (6, 4, 1), (6, 8, 3),
+    # Row 7
+    (7, 3, 1), (7, 8, 6), (7, 9, 8),
+    # Row 8
+    (8, 3, 8), (8, 4, 5), (8, 8, 1),
+    # Row 9
+    (9, 2, 9), (9, 7, 4)
+]
+```
+
+I know, this is the most *exciting* step. 
+
+Anyways, the output:
+
+```
+8 1 2 7 5 3 6 4 9
+9 4 3 6 8 2 1 7 5
+6 7 5 4 9 1 2 8 3
+1 5 4 2 3 7 8 9 6
+3 6 9 8 4 5 7 2 1
+2 8 7 1 6 9 5 3 4
+5 2 1 9 7 4 3 6 8
+4 3 8 5 2 6 9 1 7
+7 9 6 3 1 8 4 5 2
+Time Elapsed 0.006939888000488281
+```
+
+## Extras 
+
+Notable things I'm too lazy to write:
+- A proper GUI (ew, who's heard of that?)
+- Verifying if a Sudoku board is valid
+
+My solver can check if there exists a solution. However, a proper Sudoku board 
+only has one solution.
+
+Checking this is pretty trivial, since solving a board is almost instant. Basically, 
+just:
+- For each $(i, j)$, if $(i, j)$ is not included in the clues:
+  - Brute force each $k$ that isn't equal to the value our first construction gives.
+  - If a valid solution exists for that different $k$, the board has more than one valid solution.
+
+## Conclusion
+
+Well, uhh, that's something. I guess it's time to wait for the computer 
+overlords to overtake us.
+
+Anyways, that's just another dumb/useless/whatever adjective project from me. 
+Thanks for reading (or not)!
