@@ -1,0 +1,150 @@
+---
+title: Connect 4 with MCTS
+date: '2026-03-21'
+tags: ['programming']
+draft: false
+summary: Connect 4, the Electric Boogaloo.
+---
+
+I've implemented a strong Connect 4 solver earlier using the minimax algorithm,
+which can be found [here](https://github.com/eysbutno/connect4).
+While that solver is more impressive in terms of sheer strength, there are 
+a few points of annoyance:
+1. To get a solver that'd solve non-endgame positions fast, an opening book was needed. This took four whole hours to compute, even after pushing my CPU usage to 100% using multithreading.
+2. The code outside of the board representation is REALLY long, and took me way too much time to write.
+3. I am much too lazy to write a blog post on it; if you're interested, read [this](http://blog.gamesolver.org/) series of tutorials.
+
+Anyways, as a side project to distract me from college results, I decided 
+to write a powerful (but not mathematically strong) solver using the 
+**Monte Carlo Tree Search (MCTS)** technique.
+
+## Monte Carlo? Trees?
+
+First, let's establish the idea of the **Monte Carlo Method**. This is 
+the idea of using many random simulations to create an approximation of 
+the true answer. A trivial example of the Monte Carlo method is using it to 
+estimate $\pi$: we randomly plot points where $0 \leq x \leq 1$ and $0 \leq y \leq 1$, 
+and checking whether $\sqrt{x^2+y^2} \leq 1$. This essentially allows us to estimate 
+the area of the semicircle cut out, and we can backsolve for $\pi$. 
+
+Now, how does this relate to the MCTS method? Well the idea is as follows:
+- To estimate how "good" a position is, we can perform a random sequence of moves 
+  and ascertain the final result of said sequence.
+  - More precisely: we are measuring the **expected outcome** of randomly simulating 
+    moves from our position. However, it's easier to think of it as a "goodness" estimate.
+- Doing more random playouts, or **rollouts**, improves our estimate of the position. 
+- Carefully choosing which positions we choose to perform **rollouts** on can help us 
+  build strategies and choose moves that are much better than purely random moves, even 
+  without much domain-specific knowledge. 
+
+Regarding the last point: MCTS, as the name indicates, results in a tree-like data 
+structure. The idea is that we create a **game tree** of positions, where each 
+parent has child nodes of possible game states after a given move. In our search, 
+we store how "good" each position in our game tree is from our rollouts. By repeatedly 
+expanding and applying rollouts to our tree, we continually improve our estimates.
+
+Each tree node must contain the following: 
+- $q$, or the sum of wins/losses/draws from this position 
+- $n$, or the number of rollouts done that affect this node
+- $\texttt{child[i]}$, or all the child nodes of this current node 
+- $p$, or the parent of the node
+
+My implementation uses pointers for node representations, but there are 
+a whole host of other ways you can do this.
+
+With this in mind, here are the four relevant steps to MCTS.
+To produce workable results, we need to iterate these steps as many times as 
+whatever time limit we impose allows for.
+
+### 1. Selection 
+
+At every step, we want to find a node to perform a rollout on. This is because 
+one rollout can affect the estimates of the entire sequence of nodes 
+taken to reach the node that the rollout starts on. Thus, it's important
+that we have a good way of choosing which node to perform our rollouts on. 
+
+There's also the issue of **exploration vs. exploitation**: essentially,
+whether it's more fruitful to explore a new line, or to continue exploring 
+a line that's already promising. This is a pretty relevant topic in the 
+field of machine learning, and happens to come up here. 
+
+Luckily, we have a handy formula to use:
+
+$$
+\text{UCT}(\text{node}) = \frac{q}{n} + C \sqrt{\frac{\ln{n_p}}{n}}
+$$
+
+Here:
+- The UCT formula evaluates how "promising" this node is to explore
+- $q$ represents the sum of outcomes for the node, where we encode $0$ for a loss, $0.5$ for a draw, and $1$ for a win
+- $n$ represents the number of trials done 
+- $n_p$ represents the number of trials done on the parent node 
+
+Intuitively, we separate this formula into two terms: the "exploitation" and the 
+"exploration" terms, which are the left and right sides of the formula respectively. 
+This fancy formula helps us best balance between the two factors.
+
+To select a node, we start from our root, and keep on selecting the node 
+with the highest UCT value. We repeat this process until we are at a leaf.
+
+> [!IMPORTANT] 
+> Because this is a two person game, we need to make sure that each node 
+> stores the expected outcome **for the perspective of the player that the node's 
+> state represents**. This also ensures that we pick the most promising moves 
+> for our opponent, since that is crucial in writing a good game solver. 
+> 
+> Note that the UCT formula for the "exploitation" term may need to be adjusted 
+> based on our implementation. This is because, like with minimax, we aim to 
+> select the node that gives the worst results for our opponent.
+
+### 2. Expansion 
+
+Expanding our game tree is necessary to calculate relevant lines of play at 
+depth. Thus, once we select a node, we want to expand our tree by adding 
+all of the selected node's children to the tree. Then, we randomly select 
+one of these children to rollout.
+
+### 3. Rollout 
+
+This stage is relatively simple; we just randomly select moves until the game 
+is over. This is also a good opportunity to employ domain-specific knowledge: 
+we can force ourselves to always take a winning move, and to never willingly 
+pick an immediately losing move.
+
+Once we get our result from this rollout, we need to update, or backpropogate, 
+our results.
+
+### 4. Backpropogation 
+
+We simply update the $q$ and $n$ values for each relevant ancestor node 
+of our tree. Note that in our tree representation, we need to store each node's 
+parent for this reason.
+
+## Performance 
+
+If you're interested in the actual code, check out the GitHub repo [here](https://github.com/eysbutno/connect4-mcts/). Most of the code should be easy enough to 
+understand, though the bitboard code has a lot of black magic bit operations. 
+
+The solver is (relatively) powerful! If we give it two seconds of think time, 
+it's able to choose the best move (i.e. play the center column first), and 
+can beat the level 9 solver found [here](https://ludolab.net/play/four-in-a-line/computer). Unfortunately, even with 120 seconds of think time, it wasn't able 
+to find a critical move against the perfect solver, so it's not perfect. 
+
+It is worth noting that, given infinite compute time, MCTS with the UCT formula 
+*will* converge to give the same results as minimax. The proof can be found 
+online, though it's probably a pain to read.
+
+## Conclusion
+
+I think writing a MCTS solver for Connect 4 is a fun enough way to learn the 
+technique! Since Connect 4 is a *relatively* (compared to, say, Chess) simple 
+game, it helps serve as a sanity check for an implementation like this. 
+
+Also, this was (somehow) my first time using smart pointers in C++, which 
+were sometimes a little weird to wrap my head around. Regardless, it was a 
+good learning opportunity.
+
+Obviously, it's not really feasible (or worthwhile) to make a solver like this 
+as strong as a minimax solver. But, in my opinion, it's sometimes fun to do 
+things for the sake of doing them, and I think this is an example where that 
+philosophy takes form.
