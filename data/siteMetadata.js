@@ -2,7 +2,7 @@
 const siteMetadata = {
   title: 'Justin\'s Blog',
   author: 'Justin Ji',
-  headerTitle: 'Blog',
+  headerTitle: 'Justin\'s Blog',
   description: 'A mix of dumb thoughts, coding stuff, and pictures.',
   language: 'en-us',
   theme: 'system', // system, dark or light
